@@ -1,1 +1,56 @@
+name: Riello - ceny EUR i PLN
 
+on:
+  workflow_dispatch:
+
+  schedule:
+    - cron: "0 13 * * *"
+      timezone: "Europe/Warsaw"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: riello-price-sync
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Aktualizacja riello_prices.csv
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Pobierz repozytorium
+        uses: actions/checkout@v4
+
+      - name: Uruchom Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Zainstaluj zaleznosci
+        run: pip install -r requirements.txt
+
+      - name: Pobierz XLSX z FTP, przelicz ceny i wyslij CSV
+        env:
+          FTP_HOST: ${{ secrets.FTP_HOST }}
+          FTP_PORT: ${{ secrets.FTP_PORT }}
+          FTP_USER: ${{ secrets.FTP_USER }}
+          FTP_PASSWORD: ${{ secrets.FTP_PASSWORD }}
+          FTP_USE_TLS: ${{ secrets.FTP_USE_TLS }}
+
+          RIELLO_1PH_FTP_PATH: ${{ secrets.RIELLO_1PH_FTP_PATH }}
+          RIELLO_3PH_FTP_PATH: ${{ secrets.RIELLO_3PH_FTP_PATH }}
+          RIELLO_OUTPUT_FTP_PATH: ${{ secrets.RIELLO_OUTPUT_FTP_PATH }}
+
+          DUPLICATE_POLICY: highest
+        run: python scripts/riello_sync_ftp.py
+
+      - name: Zachowaj kopie CSV w GitHub Actions
+        uses: actions/upload-artifact@v4
+        with:
+          name: riello-prices
+          path: output/riello_prices.csv
+          if-no-files-found: error
+          retention-days: 14
